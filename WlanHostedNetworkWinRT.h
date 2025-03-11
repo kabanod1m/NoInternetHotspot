@@ -52,7 +52,7 @@ class IWlanHostedNetworkListener
 public:
     virtual ~IWlanHostedNetworkListener() {}
 
-    virtual void OnDeviceConnected(std::basic_string<TCHAR> remoteHostName) = 0;
+    virtual void OnDeviceConnected(std::basic_string<TCHAR> deviceId) = 0;
     virtual void OnDeviceDisconnected(std::basic_string<TCHAR> deviceId) = 0;
 
     virtual void OnAdvertisementStarted() = 0;
@@ -70,7 +70,7 @@ class IWlanHostedNetworkPrompt
 public:
     virtual ~IWlanHostedNetworkPrompt() {};
 
-    virtual bool AcceptIncommingConnection() = 0;
+    virtual bool AcceptIncomingConnection() = 0;
 };
 
 /// Wraps code to call into the WiFiDirect WinRT APIs as a replacement for the WlanHostedNetwork* functions

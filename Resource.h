@@ -16,6 +16,9 @@
 #define IDI_NOINTERNETHOTSPOT			107
 #define IDI_SMALL						108
 #define IDC_NOINTERNETHOTSPOT			109
+#define IDM_SAVELOG						110
+#define IDM_CLEARLOG					111
+#define IDM_SOURCE						112
 #define IDC_MYICON						2
 #ifndef IDC_STATIC
 #define IDC_STATIC						-1

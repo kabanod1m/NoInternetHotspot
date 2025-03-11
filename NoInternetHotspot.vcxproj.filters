@@ -24,24 +24,24 @@
     <ClInclude Include="Resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="NoInternetHotspot.h">
+    <ClInclude Include="Main.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="WlanHostedNetworkWinRT.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="HotspotHelper.h">
+    <ClInclude Include="NoInternetHotspotWnd.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="NoInternetHotspot.cpp">
+    <ClCompile Include="Main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="WlanHostedNetworkWinRT.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="HotspotHelper.cpp">
+    <ClCompile Include="NoInternetHotspotWnd.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

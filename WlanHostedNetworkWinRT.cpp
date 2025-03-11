@@ -33,7 +33,7 @@ WlanHostedNetworkHelper::WlanHostedNetworkHelper()
     : _ssidProvided(false),
       _passphraseProvided(false),
       _listener(nullptr),
-      _autoAccept(true)
+      _autoAccept(false)
 {
 }
 
@@ -293,7 +293,7 @@ void WlanHostedNetworkHelper::StartListener()
         bool acceptConnection = true;
         if (!_autoAccept && _prompt != nullptr)
         {
-            acceptConnection = _prompt->AcceptIncommingConnection();
+            acceptConnection = _prompt->AcceptIncomingConnection();
         }
 
         try
@@ -459,7 +459,7 @@ void WlanHostedNetworkHelper::StartListener()
                             // Notify Listener
                             if (_listener != nullptr)
                             {
-                                _listener->OnDeviceConnected(remoteHostNameDisplay.GetRawBuffer(nullptr));
+                                _listener->OnDeviceConnected(deviceId.GetRawBuffer(nullptr));
                             }
                         }
                         else
