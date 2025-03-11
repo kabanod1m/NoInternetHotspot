@@ -9,3 +9,6 @@ Then just download the executable file from [Releases](https://github.com/kabano
 
 ### License
 NoInternetHotspot is licensed under GPL-3.0.
+
+<img src="https://raw.githubusercontent.com/kabanod1m/NoInternetHotspot/refs/heads/master/readme-assets/screenshot1.png" />
+<img src="https://raw.githubusercontent.com/kabanod1m/NoInternetHotspot/refs/heads/master/readme-assets/screenshot2.png" />
