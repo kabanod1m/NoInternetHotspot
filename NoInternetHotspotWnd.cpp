@@ -206,7 +206,9 @@ BOOL NoInternetHotspotWnd::InitInstance (HINSTANCE hInstance, int nCmdShow) {
     default_window_rect.right = DEFAULT_WINDOWWIDTH;
     default_window_rect.bottom = DEFAULT_WINDOWHEIGHT;
     AdjustWindowRect(&default_window_rect, WS_OVERLAPPEDWINDOW, 0);
+#pragma warning(suppress: 4244) // respectfully screen resolutions won't ever be larger than short limit? >32767
     adjframewidth = default_window_rect.right - default_window_rect.left - DEFAULT_WINDOWWIDTH;
+#pragma warning(suppress: 4244) // respectfully screen resolutions won't ever be larger than short limit? >32767
     adjframeheight = default_window_rect.bottom - default_window_rect.top - DEFAULT_WINDOWHEIGHT;
 
     HWND hWnd = CreateWindow(
@@ -266,6 +268,7 @@ LRESULT CALLBACK NoInternetHotspotWnd::WndProc (HWND hWnd, UINT message, WPARAM 
                     break;
                 }
                 MoveWindow(hList, GUI_LIS_LIST_X, GUI_LIS_LIST_Y, GUI_LIS_LIST_W, window_rect.bottom - window_rect.top - nihwnd->adjframeheight - (DEFAULT_WINDOWHEIGHT - GUI_LIS_LIST_H), FALSE);
+#pragma warning(suppress: 4244) // respectfully screen resolutions won't ever be larger than short limit? >32767
                 short logwidth = (window_rect.right - window_rect.left < DEFAULT_LOGWINDOWWIDTH) ? GUI_TXT_LOG_W : window_rect.right - window_rect.left - nihwnd->adjframewidth - (DEFAULT_LOGWINDOWWIDTH - GUI_TXT_LOG_W);
                 MoveWindow(hLblLog, GUI_LBL_LOG_X, GUI_LBL_LOG_Y, logwidth, GUI_LBL_LOG_H, FALSE);
                 MoveWindow(hLog, GUI_TXT_LOG_X, GUI_TXT_LOG_Y, logwidth, window_rect.bottom - window_rect.top - nihwnd->adjframeheight - (DEFAULT_WINDOWHEIGHT - GUI_TXT_LOG_H), FALSE);
