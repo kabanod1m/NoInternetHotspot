@@ -136,4 +136,5 @@ class NoInternetHotspotWnd : public IWlanHostedNetworkListener, public IWlanHost
 	static DWORD WINAPI SwitchHotspot (LPVOID lpParam);
 
 	static TCHAR* GetField (HWND hWnd);
+	void SwitchAutoaccept (bool turnon);
 };

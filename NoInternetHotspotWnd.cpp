@@ -90,6 +90,17 @@ NoInternetHotspotWnd::NoInternetHotspotWnd (_In_ HINSTANCE hInstance, _In_opt_ H
     }
     hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_NOINTERNETHOTSPOT));
 
+    // Handle config
+    if (nihwnd->cfgloadsuccess) {
+        if (nihwnd->cfg.hidepass) {
+            SendMessage(hPass, EM_SETPASSWORDCHAR, '*', 0);
+            RedrawWindow(hPass, nullptr, nullptr, RDW_INVALIDATE);
+        }
+        if (nihwnd->cfg.hidepass) CheckDlgButton(hMain, IDM_HIDE, BST_CHECKED);
+        if (nihwnd->cfg.autoaccept) nihwnd->SwitchAutoaccept(TRUE);
+        if (!nihwnd->cfgloadsuccess) nihwnd->LogMessage(std::wstring(L"Couldn't load preferences from ") + STR_CFG_REGPATH + std::wstring(L" ; it's to be expected if the program was started for the first time."));
+    }
+
     // Handle command line actions
     for (int i = 0; i < argns.size(); i++) {
         //LogMessage(L"ARGN:" + argns[i]);
@@ -120,14 +131,11 @@ NoInternetHotspotWnd::NoInternetHotspotWnd (_In_ HINSTANCE hInstance, _In_opt_ H
             }
         } else if (argns[i] == L"auto") {
             if (argvs[i] != L"false") {
-                CheckDlgButton(hMain, IDM_AUTO, BST_CHECKED);
-                _hostedNetwork.SetAutoAccept(TRUE);
+                SwitchAutoaccept(TRUE);
 
                 LogMessage(lpmmsg + STR_LPM_AUTO + L"to true");
-            }
-            else {
-                CheckDlgButton(hMain, IDM_AUTO, BST_UNCHECKED);
-                _hostedNetwork.SetAutoAccept(FALSE);
+            } else {
+                SwitchAutoaccept(FALSE);
 
                 LogMessage(lpmmsg + STR_LPM_AUTO + L"to false");
             }
@@ -577,18 +585,12 @@ void NoInternetHotspotWnd::LayOutUI (HWND hWnd) {
     // "Wi-Fi Network password" input box
     hPass = CreateWindow(_T("Edit"), nihwnd->cfg.pass, WS_VISIBLE | WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, GUI_INP_PASS_X, GUI_INP_PASS_Y, GUI_INP_PASS_W, GUI_INP_PASS_WH, hWnd, nullptr, nullptr, nullptr);
     SendMessage(hPass, EM_LIMITTEXT, MAX_PASSWORDLENGTH, 0);
-    if (nihwnd->cfg.hidepass) {
-        SendMessage(hPass, EM_SETPASSWORDCHAR, '*', 0);
-        RedrawWindow(hPass, nullptr, nullptr, RDW_INVALIDATE);
-    }
     // "Start"(/"Stop") button
     hCtrl = CreateWindow(_T("Button"), STR_BTN_START, WS_VISIBLE | WS_CHILD | WS_TABSTOP, GUI_BTN_START_X, GUI_BTN_START_Y, GUI_BTN_START_W, GUI_BTN_START_H, hWnd, (HMENU)IDM_CTRL, nullptr, nullptr);
     // "Hide" checkbox
     hHide = CreateWindow(_T("Button"), _T("Hide"), WS_VISIBLE | WS_CHILD | BS_CHECKBOX | WS_TABSTOP, GUI_CHK_HIDE_X, GUI_CHK_HIDE_Y, GUI_CHK_HIDE_W, GUI_CHK_HIDE_H, hWnd, (HMENU)IDM_HIDE, hInst, nullptr);
-    if (nihwnd->cfg.hidepass) CheckDlgButton(hWnd, IDM_HIDE, BST_CHECKED);
     // "Auto-accept" checkbox
     hAuto = CreateWindow(_T("Button"), _T("Auto-accept"), WS_VISIBLE | WS_CHILD | BS_CHECKBOX | WS_TABSTOP, GUI_CHK_AUTO_X, GUI_CHK_AUTO_Y, GUI_CHK_AUTO_W, GUI_CHK_AUTO_H, hWnd, (HMENU)IDM_AUTO, hInst, nullptr);
-    if (nihwnd->cfg.autoaccept) CheckDlgButton(hWnd, IDM_AUTO, BST_CHECKED);
     // "Currently connected:" label
     CreateWindow(_T("Static"), _T("Currently connected:"), WS_VISIBLE | WS_CHILD, GUI_LBL_LIST_X, GUI_LBL_LIST_Y, GUI_LBL_LIST_W, GUI_LBL_LIST_H, hWnd, nullptr, nullptr, nullptr);
     // "Currently connected:" listbox
@@ -601,8 +603,6 @@ void NoInternetHotspotWnd::LayOutUI (HWND hWnd) {
     hSave = CreateWindow(_T("Button"), _T("Save to File"), WS_VISIBLE | WS_CHILD, GUI_BTN_SAVELOG_X, GUI_BTN_SAVELOG_Y, GUI_BTN_SAVELOG_W, GUI_BTN_SAVELOG_H, hWnd, (HMENU)IDM_SAVELOG, nullptr, nullptr);
     // "Clear log" button
     hClear = CreateWindow(_T("Button"), _T("Clear"), WS_VISIBLE | WS_CHILD, GUI_BTN_CLEARLOG_X, GUI_BTN_CLEARLOG_Y, GUI_BTN_CLEARLOG_W, GUI_BTN_CLEARLOG_H, hWnd, (HMENU)IDM_CLEARLOG, nullptr, nullptr);
-
-    if (!nihwnd->cfgloadsuccess) nihwnd->LogMessage(std::wstring(L"Couldn't load preferences from ") + STR_CFG_REGPATH + std::wstring(L" ; it's to be expected if the program was started for the first time."));
 }
 
 TCHAR* NoInternetHotspotWnd::GetField (HWND hWnd) {
@@ -624,6 +624,17 @@ TCHAR* NoInternetHotspotWnd::GetField (HWND hWnd) {
 #endif
             + 1);
     return tempfieldbuffer;
+}
+
+void NoInternetHotspotWnd::SwitchAutoaccept (bool turnon) {
+    if (turnon) {
+        int amougs = CheckDlgButton(hMain, IDM_AUTO, BST_CHECKED);
+        _hostedNetwork.SetAutoAccept(TRUE);
+        int sus = IsDlgButtonChecked(hMain, IDM_AUTO);
+        return;
+    }
+    CheckDlgButton(hMain, IDM_AUTO, BST_UNCHECKED);
+    _hostedNetwork.SetAutoAccept(FALSE);
 }
 
 void NoInternetHotspotWnd::OnDeviceConnected (std::wstring deviceId) {
