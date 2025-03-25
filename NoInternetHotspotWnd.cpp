@@ -98,7 +98,8 @@ NoInternetHotspotWnd::NoInternetHotspotWnd (_In_ HINSTANCE hInstance, _In_opt_ H
         }
         if (nihwnd->cfg.hidepass) CheckDlgButton(hMain, IDM_HIDE, BST_CHECKED);
         if (nihwnd->cfg.autoaccept) nihwnd->SwitchAutoaccept(TRUE);
-        if (!nihwnd->cfgloadsuccess) nihwnd->LogMessage(std::wstring(L"Couldn't load preferences from ") + STR_CFG_REGPATH + std::wstring(L" ; it's to be expected if the program was started for the first time."));
+    } else {
+        nihwnd->LogMessage(std::wstring(L"Couldn't load preferences from ") + STR_CFG_REGPATH + std::wstring(L" ; it's to be expected if the program was started for the first time."));
     }
 
     // Handle command line actions
