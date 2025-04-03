@@ -629,9 +629,7 @@ TCHAR* NoInternetHotspotWnd::GetField (HWND hWnd) {
 
 void NoInternetHotspotWnd::SwitchAutoaccept (bool turnon) {
     if (turnon) {
-        int amougs = CheckDlgButton(hMain, IDM_AUTO, BST_CHECKED);
         _hostedNetwork.SetAutoAccept(TRUE);
-        int sus = IsDlgButtonChecked(hMain, IDM_AUTO);
         return;
     }
     CheckDlgButton(hMain, IDM_AUTO, BST_UNCHECKED);
