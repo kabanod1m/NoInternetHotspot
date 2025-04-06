@@ -459,6 +459,34 @@ INT_PTR CALLBACK NoInternetHotspotWnd::About (HWND hDlg, UINT message, WPARAM wP
     return (INT_PTR)FALSE;
 }
 
+// Message handler for "SSID (W-Fi Network name)" input box to process Ctrl-A presses.
+WNDPROC procSsidO;
+INT_PTR CALLBACK procSsid (HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    UNREFERENCED_PARAMETER(lParam);
+    switch (message) {
+    case WM_CHAR:
+        if (wParam == 1) {
+            SendMessage(hWnd, EM_SETSEL, 0, -1);
+            return 1;
+        }
+    }
+    return CallWindowProc(procSsidO, hWnd, message, wParam, lParam);
+}
+
+// Message handler for "SSID (W-Fi Network name)" input box to process Ctrl-A presses.
+WNDPROC procPassO;
+INT_PTR CALLBACK procPass (HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    UNREFERENCED_PARAMETER(lParam);
+    switch (message) {
+    case WM_CHAR:
+        if (wParam == 1) {
+            SendMessage(hWnd, EM_SETSEL, 0, -1);
+            return 1;
+        }
+    }
+    return CallWindowProc(procPassO, hWnd, message, wParam, lParam);
+}
+
 // config
 bool NoInternetHotspotWnd::ReadConfig (config* ptConfig) {
     unsigned long cfgssidsize = (MAX_SSIDLENGTH + 1) * sizeof(TCHAR);
@@ -581,11 +609,13 @@ void NoInternetHotspotWnd::LayOutUI (HWND hWnd) {
     // "SSID (W-Fi Network name)" input box
     hSsid = CreateWindow(_T("Edit"), nihwnd->cfg.ssid, WS_VISIBLE | WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, GUI_INP_SSID_X, GUI_INP_SSID_Y, GUI_INP_SSID_W, GUI_INP_SSID_H, hWnd, nullptr, nullptr, nullptr);
     SendMessage(hSsid, EM_LIMITTEXT, MAX_SSIDLENGTH, 0);
+    procSsidO = reinterpret_cast<WNDPROC>(SetWindowLongPtr(hSsid, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(procSsid)));
     // "Wi-Fi Network password" label
     CreateWindow(_T("Static"), _T("Wi-Fi Network password"), WS_VISIBLE | WS_CHILD, GUI_LBL_PASS_X, GUI_LBL_PASS_Y, GUI_LBL_PASS_W, GUI_LBL_PASS_H, hWnd, nullptr, nullptr, nullptr);
     // "Wi-Fi Network password" input box
     hPass = CreateWindow(_T("Edit"), nihwnd->cfg.pass, WS_VISIBLE | WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, GUI_INP_PASS_X, GUI_INP_PASS_Y, GUI_INP_PASS_W, GUI_INP_PASS_WH, hWnd, nullptr, nullptr, nullptr);
     SendMessage(hPass, EM_LIMITTEXT, MAX_PASSWORDLENGTH, 0);
+    procPassO = reinterpret_cast<WNDPROC>(SetWindowLongPtr(hPass, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(procPass)));
     // "Start"(/"Stop") button
     hCtrl = CreateWindow(_T("Button"), STR_BTN_START, WS_VISIBLE | WS_CHILD | WS_TABSTOP, GUI_BTN_START_X, GUI_BTN_START_Y, GUI_BTN_START_W, GUI_BTN_START_H, hWnd, (HMENU)IDM_CTRL, nullptr, nullptr);
     // "Hide" checkbox
