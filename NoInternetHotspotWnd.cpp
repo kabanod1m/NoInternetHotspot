@@ -35,7 +35,7 @@ NoInternetHotspotWnd::NoInternetHotspotWnd (_In_ HINSTANCE hInstance, _In_opt_ H
     while ((posslash = wCmdLineStr.find('/')) != std::wstring::npos) {
         ParseArg(&wCmdLineStr, posslash, &argns, &argvs);
     }
-    ParseArg(&wCmdLineStr, -1, &argns, &argvs);
+    ParseArg(&wCmdLineStr, std::wstring::npos, &argns, &argvs);
     argns.erase(argns.begin());
     argvs.erase(argvs.begin());
 
@@ -103,7 +103,7 @@ NoInternetHotspotWnd::NoInternetHotspotWnd (_In_ HINSTANCE hInstance, _In_opt_ H
     }
 
     // Handle command line actions
-    for (int i = 0; i < argns.size(); i++) {
+    for (size_t i = 0; i < argns.size(); i++) {
         //LogMessage(L"ARGN:" + argns[i]);
         //LogMessage(L"ARGV:" + argvs[i]);
         static const std::wstring lpmmsg = std::wstring(STR_LPM);
@@ -161,7 +161,7 @@ void NoInternetHotspotWnd::ParseArg (std::wstring* CmdString, size_t inSlashPos,
     std::wstring argv = L"";
     argn = CmdString->substr(0, inSlashPos);
     if ((posspace = argn.find(' ')) != std::wstring::npos) {
-        argv = argn.substr(posspace + 1, argn.length() - (posspace + 1) - ((inSlashPos == -1) ? 0 : 1));
+        argv = argn.substr(posspace + 1, argn.length() - (posspace + 1) - ((inSlashPos == std::wstring::npos) ? 0 : 1));
         argn = argn.substr(0, posspace);
     }
     outArgns->push_back(argn);
@@ -315,11 +315,13 @@ LRESULT CALLBACK NoInternetHotspotWnd::WndProc (HWND hWnd, UINT message, WPARAM 
                         SendMessage(hSsid, EM_SETREADONLY, TRUE, 0);
                         SendMessage(hPass, EM_SETREADONLY, TRUE, 0);
                         
-                        TCHAR* input = GetField(hSsid);
-                        nihwnd->_hostedNetwork.SetSSID(input);
-                        input = GetField(hPass);
-                        nihwnd->_hostedNetwork.SetPassphrase(input);
+                        TCHAR* ssid = GetField(hSsid);
+                        TCHAR* pass = GetField(hPass);
+                        nihwnd->_hostedNetwork.SetSSID(ssid);
+                        nihwnd->_hostedNetwork.SetPassphrase(pass);
                         startstopthread = CreateThread(NULL, 0, SwitchHotspot, &hotspot_started, 0, &startstopthreadid);
+                        free(ssid);
+                        free(pass);
                         break;
                     } // turn off hotspot
                     EnableWindow(hCtrl, FALSE);
@@ -360,7 +362,7 @@ LRESULT CALLBACK NoInternetHotspotWnd::WndProc (HWND hWnd, UINT message, WPARAM 
                             nihwnd->LogMessage(failmsg + L"Out Of Memory");
                             break;
                         }
-                        if (!GetWindowText(hLog, logtext, logtextsize)) {
+                        if (!GetWindowText(hLog, logtext, static_cast<int>(logtextsize))) {
                             nihwnd->LogMessage(failmsg + L"Could not get log's contents");
                             break;
                         }
@@ -385,7 +387,12 @@ LRESULT CALLBACK NoInternetHotspotWnd::WndProc (HWND hWnd, UINT message, WPARAM 
                             break;
                         }
                         DWORD writtenbytes;
-                        if (!WriteFile(hOutfile, logtext, logtextsize, &writtenbytes, NULL)) {
+                        if (!WriteFile(
+                                hOutfile, 
+                                logtext, 
+                                static_cast<DWORD>(logtextsize),
+                                &writtenbytes, 
+                                NULL)) {
                             free(logtext);
                             CloseHandle(hOutfile);
                             nihwnd->LogMessage(failmsg + L"Could not write log's contents to file");
@@ -674,7 +681,11 @@ void NoInternetHotspotWnd::OnDeviceConnected (std::wstring deviceId) {
 
 void NoInternetHotspotWnd::OnDeviceDisconnected (std::wstring deviceId) {
     LogMessage(L"Peer disconnected: " + deviceId);
-    int index = SendMessage(hList, LB_FINDSTRINGEXACT, -1, (LPARAM)deviceId.c_str());
+    LRESULT index = SendMessage(
+        hList, 
+        LB_FINDSTRINGEXACT, 
+        -1, 
+        (LPARAM)deviceId.c_str());
     SendMessage(hList, LB_DELETESTRING, index, 0);
 }
 
@@ -686,8 +697,16 @@ void NoInternetHotspotWnd::OnAdvertisementStarted () {
     SetEvent(_apEvent.Get());
     CloseHandle(startstopthread);
     hotspot_started = true;
-
-    WriteConfig(GetField(hSsid), GetField(hPass), SendMessage(hHide, BM_GETCHECK, 0, 0), SendMessage(hAuto, BM_GETCHECK, 0, 0));
+ 
+    TCHAR* ssid = GetField(hSsid);
+    TCHAR* pass = GetField(hPass);
+    WriteConfig(
+        ssid,
+        pass,
+        static_cast<DWORD>(SendMessage(hHide, BM_GETCHECK, 0, 0)),
+        static_cast<DWORD>(SendMessage(hAuto, BM_GETCHECK, 0, 0)));
+    free(ssid);
+    free(pass);
 }
 
 void NoInternetHotspotWnd::OnAdvertisementStopped (std::wstring message) {
