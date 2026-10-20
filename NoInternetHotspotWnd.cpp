@@ -1,4 +1,19 @@
+#include <atomic>
 #include "NoInternetHotspotWnd.h"
+
+// Local Limits
+#if MAX_SSIDLENGTH > MAX_PASSWORDLENGTH
+    #define MAX_STRBUFFLENGTH MAX_SSIDLENGTH
+#else
+    #define MAX_STRBUFFLENGTH MAX_PASSWORDLENGTH
+#endif
+
+#if MAX_SSIDLENGTH > MAX_COMPUTERNAME_LENGTH
+    #define MAX_CHARBUFFLENGTH MAX_SSIDLENGTH
+#else
+    #define MAX_CHARBUFFLENGTH MAX_COMPUTERNAME_LENGTH
+#endif
+
 
 // Global Constants:
 const TCHAR empty_string[1] = _T("");
@@ -9,7 +24,7 @@ HANDLE startstopthread; DWORD startstopthreadid;
 HINSTANCE hInst;                                // current instance
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
-bool hotspot_started = FALSE;
+std::atomic_bool hotspot_started{ false };
 bool logfirstentry = TRUE;
 
 // UI Global Variables:
@@ -47,12 +62,8 @@ NoInternetHotspotWnd::NoInternetHotspotWnd (_In_ HINSTANCE hInstance, _In_opt_ H
         TCHAR srandom[5];
         _stprintf_s(srandom, _T("%04d"), random);
         // default "Wi-Fi Network name" value
-        DWORD bufCharCount =
-#if MAX_SSIDLENGTH > MAX_COMPUTERNAME_LENGTH
-            MAX_SSIDLENGTH;
-#else
-            MAX_COMPUTERNAME_LENGTH;
-#endif
+        DWORD bufCharCount = MAX_COMPUTERNAME_LENGTH;
+
         if (!GetComputerName(cfg.ssid, &bufCharCount)) {
             StringCchCopy(cfg.ssid, sizeof(cfg.ssid) / sizeof(cfg.ssid[0]), _T("NoInternet"));
             StringCchCat(cfg.ssid, sizeof(cfg.ssid) / sizeof(cfg.ssid[0]), srandom); // later this will get saved to a config file so that the user won't have to manually connect every time
@@ -131,6 +142,7 @@ NoInternetHotspotWnd::NoInternetHotspotWnd (_In_ HINSTANCE hInstance, _In_opt_ H
                 LogMessage(lpmmsg + STR_LPM_HIDE + L"to false");
             }
         } else if (argns[i] == L"auto") {
+            std::transform(argvs[i].begin(), argvs[i].end(), argvs[i].begin(), towlower);
             if (argvs[i] != L"false") {
                 SwitchAutoaccept(TRUE);
 
@@ -156,8 +168,8 @@ NoInternetHotspotWnd::~NoInternetHotspotWnd () {
 }
 
 void NoInternetHotspotWnd::ParseArg (std::wstring* CmdString, size_t inSlashPos, std::vector<std::wstring>* outArgns, std::vector<std::wstring>* outArgvs) { // use inSlashPos = -1 to not erase
-    static size_t posspace;
-    static std::wstring argn;
+    size_t posspace;
+    std::wstring argn;
     std::wstring argv = L"";
     argn = CmdString->substr(0, inSlashPos);
     if ((posspace = argn.find(' ')) != std::wstring::npos) {
@@ -166,7 +178,8 @@ void NoInternetHotspotWnd::ParseArg (std::wstring* CmdString, size_t inSlashPos,
     }
     outArgns->push_back(argn);
     outArgvs->push_back(argv);
-    CmdString->erase(0, inSlashPos + 1);
+    if (inSlashPos != std::wstring::npos)
+        CmdString->erase(0, inSlashPos + 1);
 }
 
 //
@@ -305,7 +318,7 @@ LRESULT CALLBACK NoInternetHotspotWnd::WndProc (HWND hWnd, UINT message, WPARAM 
                     }
                     break;
                 case IDM_CTRL:
-                    if (!hotspot_started) { // turn on hotspot
+                    if (!hotspot_started.load()) { // turn on hotspot
                         if (GetWindowTextLength(hSsid) == 0 || GetWindowTextLength(hPass) == 0) {
                             MessageBox(hMain, _T("Fields must not be empty!"), STR_WARNING, MB_OK);
                             break;
@@ -315,18 +328,16 @@ LRESULT CALLBACK NoInternetHotspotWnd::WndProc (HWND hWnd, UINT message, WPARAM 
                         SendMessage(hSsid, EM_SETREADONLY, TRUE, 0);
                         SendMessage(hPass, EM_SETREADONLY, TRUE, 0);
                         
-                        TCHAR* ssid = GetField(hSsid);
-                        TCHAR* pass = GetField(hPass);
-                        nihwnd->_hostedNetwork.SetSSID(ssid);
-                        nihwnd->_hostedNetwork.SetPassphrase(pass);
-                        startstopthread = CreateThread(NULL, 0, SwitchHotspot, &hotspot_started, 0, &startstopthreadid);
-                        free(ssid);
-                        free(pass);
+                        std::wstring ssid = GetField(hSsid);
+                        std::wstring pass = GetField(hPass);
+                        nihwnd->_hostedNetwork.SetSSID(ssid.c_str());
+                        nihwnd->_hostedNetwork.SetPassphrase(pass.c_str());
+                        startstopthread = CreateThread(NULL, 0, SwitchHotspot, nullptr, 0, &startstopthreadid);
                         break;
                     } // turn off hotspot
                     EnableWindow(hCtrl, FALSE);
 
-                    startstopthread = CreateThread(NULL, 0, SwitchHotspot, &hotspot_started, 0, &startstopthreadid);
+                    startstopthread = CreateThread(NULL, 0, SwitchHotspot, nullptr, 0, &startstopthreadid);
                     break;
                 case IDM_AUTO:
                     if (IsDlgButtonChecked(hWnd, IDM_AUTO)) {
@@ -364,6 +375,7 @@ LRESULT CALLBACK NoInternetHotspotWnd::WndProc (HWND hWnd, UINT message, WPARAM 
                         }
                         if (!GetWindowText(hLog, logtext, static_cast<int>(logtextsize))) {
                             nihwnd->LogMessage(failmsg + L"Could not get log's contents");
+                            free(logtext);
                             break;
                         }
 
@@ -377,6 +389,7 @@ LRESULT CALLBACK NoInternetHotspotWnd::WndProc (HWND hWnd, UINT message, WPARAM 
                         filechoice.Flags = OFN_HIDEREADONLY | OFN_ENABLESIZING;
                         filechoice.lpstrDefExt = _T("txt");
                         if (!GetSaveFileName(&filechoice)) {
+                            free(logtext);
                             nihwnd->LogMessage(failmsg + L"Cancelled by user");
                             break;
                         }
@@ -438,7 +451,7 @@ LRESULT CALLBACK NoInternetHotspotWnd::WndProc (HWND hWnd, UINT message, WPARAM 
             }
             break;
         case WM_DESTROY:
-            if (hotspot_started) {
+            if (hotspot_started.load()) {
                 nihwnd->_hostedNetwork.Stop();
                 WaitForSingleObjectEx(nihwnd->_apEvent.Get(), MAX_TIMEOUT, FALSE);
             }
@@ -494,118 +507,128 @@ INT_PTR CALLBACK procPass (HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
     return CallWindowProc(procPassO, hWnd, message, wParam, lParam);
 }
 
-// config
-bool NoInternetHotspotWnd::ReadConfig (config* ptConfig) {
-    unsigned long cfgssidsize = (MAX_SSIDLENGTH + 1) * sizeof(TCHAR);
-    unsigned long cfgpasssize = (MAX_PASSWORDLENGTH + 1) * sizeof(TCHAR);
-    unsigned long cfghidepasssize = sizeof(ptConfig->hidepass);
-    unsigned long cfgautoacceptsize = sizeof(ptConfig->autoaccept);
-    HKEY hkSOFTWARE;
-    if (    RegOpenKeyEx(HKEY_CURRENT_USER, _T("SOFTWARE"), 0, KEY_READ, &hkSOFTWARE) != ERROR_SUCCESS ||
-            RegGetValue(hkSOFTWARE, CFG_NAME, CFG_SSID, RRF_RT_REG_SZ, NULL, ptConfig->ssid, &cfgssidsize) != ERROR_SUCCESS ||
-            RegGetValue(hkSOFTWARE, CFG_NAME, CFG_PASS, RRF_RT_REG_SZ, NULL, ptConfig->pass, &cfgpasssize) != ERROR_SUCCESS ||
-            RegGetValue(hkSOFTWARE, CFG_NAME, CFG_HIDEPASS, RRF_RT_DWORD, NULL, &(ptConfig->hidepass), &cfghidepasssize) != ERROR_SUCCESS ||
-            RegGetValue(hkSOFTWARE, CFG_NAME, CFG_AUTOACCEPT, RRF_RT_DWORD, NULL, &(ptConfig->autoaccept), &cfgautoacceptsize) != ERROR_SUCCESS ||
-            RegCloseKey(hkSOFTWARE) != ERROR_SUCCESS) {
+
+bool NoInternetHotspotWnd::ReadRegistryValue(HKEY hKey, LPCTSTR valueName, DWORD flags, void* data, DWORD* size, LONG& err, std::wstring& failedValue, DWORD& failedSize) {
+    err = RegGetValue(hKey, CFG_NAME, valueName, flags, nullptr, data, size);
+
+    if (err != ERROR_SUCCESS) {
+        failedValue = valueName;
+        failedSize = *size;
         return false;
     }
-    // for debug
-    /*int ret;
-    ret = RegOpenKeyEx(HKEY_CURRENT_USER, _T("SOFTWARE"), 0, KEY_READ, &hkSOFTWARE);
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"1 Couldn't load preferences from ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return false;
-    }
-    ret = RegGetValue(hkSOFTWARE, CFG_NAME, CFG_SSID, RRF_RT_REG_SZ, NULL, ptConfig->ssid, &cfgssidsize);
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"2 Couldn't load preferences from ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return false;
-    }
-    ret = RegGetValue(hkSOFTWARE, CFG_NAME, CFG_PASS, RRF_RT_REG_SZ, NULL, ptConfig->pass, &cfgpasssize);
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"3 Couldn't load preferences from ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return false;
-    }
-    ret = RegGetValue(hkSOFTWARE, CFG_NAME, CFG_HIDEPASS, RRF_RT_DWORD, NULL, &(ptConfig->hidepass), &cfghidepasssize);
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"4 Couldn't load preferences from ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return false;
-    }
-    ret = RegGetValue(hkSOFTWARE, CFG_NAME, CFG_AUTOACCEPT, RRF_RT_DWORD, NULL, &(ptConfig->autoaccept), &cfgautoacceptsize);
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"5 Couldn't load preferences from ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return false;
-    }
-    ret = RegCloseKey(hkSOFTWARE);
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"6 Couldn't load preferences from ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return false;
-    }*/
+
     return true;
 }
 
-void NoInternetHotspotWnd::WriteConfig (TCHAR* uiSsid, TCHAR* uiPass, DWORD uiHidepass, DWORD uiAutoaccept) {
-    HKEY hkSOFTWARE;
-    HKEY hkNoInternetHotspot;
-    if (    uiSsid == NULL || uiPass == NULL ||
-            RegOpenKeyEx(HKEY_CURRENT_USER, _T("SOFTWARE"), 0, KEY_CREATE_SUB_KEY, &hkSOFTWARE) != ERROR_SUCCESS ||
-            RegCreateKeyEx(hkSOFTWARE, CFG_NAME, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hkNoInternetHotspot, NULL) != ERROR_SUCCESS ||
-            RegSetValueEx(hkNoInternetHotspot, CFG_SSID, 0, REG_SZ, (LPBYTE)uiSsid, ((((DWORD)lstrlen(uiSsid) + 1)) * sizeof(TCHAR))) != ERROR_SUCCESS ||
-            RegSetValueEx(hkNoInternetHotspot, CFG_PASS, 0, REG_SZ, (LPBYTE)uiPass, ((((DWORD)lstrlen(uiPass) + 1)) * sizeof(TCHAR))) != ERROR_SUCCESS ||
-            RegSetValueEx(hkNoInternetHotspot, CFG_HIDEPASS, 0, REG_DWORD, (BYTE*)&uiHidepass, sizeof(DWORD)) != ERROR_SUCCESS ||
-            RegSetValueEx(hkNoInternetHotspot, CFG_AUTOACCEPT, 0, REG_DWORD, (BYTE*)&uiAutoaccept, sizeof(DWORD)) != ERROR_SUCCESS ||
-            RegCloseKey(hkNoInternetHotspot) != ERROR_SUCCESS ||
-            RegCloseKey(hkSOFTWARE) != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"Couldn't save preferences to ") + STR_CFG_REGPATH);
-        return;
+
+bool NoInternetHotspotWnd::ReadConfig(config* ptConfig) {
+    bool success = false;
+
+    HKEY hkSOFTWARE = nullptr;
+    LONG err = ERROR_SUCCESS;
+
+    std::wstring failedValue;
+    DWORD failedSize = 0;
+
+    DWORD cfgssidsize = (MAX_SSIDLENGTH + 1) * sizeof(TCHAR);
+    DWORD cfgpasssize = (MAX_PASSWORDLENGTH + 1) * sizeof(TCHAR);
+    DWORD cfghidepasssize = sizeof(ptConfig->hidepass);
+    DWORD cfgautoacceptsize = sizeof(ptConfig->autoaccept);
+
+    err = RegOpenKeyEx(HKEY_CURRENT_USER, _T("SOFTWARE"), 0, KEY_READ, &hkSOFTWARE);
+    if (err == ERROR_SUCCESS) {
+        success = ReadRegistryValue(hkSOFTWARE, CFG_SSID, RRF_RT_REG_SZ, ptConfig->ssid, &cfgssidsize, err, failedValue, failedSize)
+            && ReadRegistryValue(hkSOFTWARE, CFG_PASS, RRF_RT_REG_SZ, ptConfig->pass, &cfgpasssize, err, failedValue, failedSize)
+            && ReadRegistryValue(hkSOFTWARE, CFG_HIDEPASS, RRF_RT_DWORD, &ptConfig->hidepass, &cfghidepasssize, err, failedValue, failedSize)
+            && ReadRegistryValue(hkSOFTWARE, CFG_AUTOACCEPT, RRF_RT_DWORD, &ptConfig->autoaccept, &cfgautoacceptsize, err, failedValue,failedSize);
+    } else {
+        failedValue = L"(open key)";
     }
-    // for debug
-    /*int ret;
-    ret = RegOpenKeyEx(HKEY_CURRENT_USER, _T("SOFTWARE"), 0, KEY_CREATE_SUB_KEY, &hkSOFTWARE);
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"1 Couldn't save preferences to ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return;
+
+    if (hkSOFTWARE) {
+        RegCloseKey(hkSOFTWARE);
     }
-    ret = RegCreateKeyEx(hkSOFTWARE, CFG_NAME, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hkNoInternetHotspot, NULL);
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"2 Couldn't save preferences to ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return;
+
+    if (!success) {
+        nihwnd->LogMessage(
+            std::wstring(L"Registry read failed. Key=[") + STR_CFG_REGPATH
+            + L"] Value=[" + failedValue
+            + L"] BufferSize=[" + std::to_wstring(failedSize)
+            + L"] Error=[" + std::to_wstring(err)
+            + L"]");
     }
-    ret = RegSetValueEx(hkNoInternetHotspot, CFG_SSID, 0, REG_SZ, (LPBYTE)uiSsid, ((((DWORD)lstrlen(uiSsid) + 1)) * sizeof(TCHAR)));
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"3 Couldn't save preferences to ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return;
-    }
-    ret = RegSetValueEx(hkNoInternetHotspot, CFG_PASS, 0, REG_SZ, (LPBYTE)uiPass, ((((DWORD)lstrlen(uiPass) + 1)) * sizeof(TCHAR)));
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"4 Couldn't save preferences to ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return;
-    }
-    ret = RegSetValueEx(hkNoInternetHotspot, CFG_HIDEPASS, 0, REG_DWORD, reinterpret_cast<BYTE*>(&uiHidepass), sizeof(bool));
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"5 Couldn't save preferences to ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return;
-    }
-    ret = RegSetValueEx(hkNoInternetHotspot, CFG_AUTOACCEPT, 0, REG_DWORD, reinterpret_cast<BYTE*>(&uiAutoaccept), sizeof(bool));
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"6 Couldn't save preferences to ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return;
-    }
-    ret = RegCloseKey(hkNoInternetHotspot);
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"7 Couldn't save preferences to ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return;
-    }
-    ret = RegCloseKey(hkSOFTWARE);
-    if (ret != ERROR_SUCCESS) {
-        nihwnd->LogMessage(std::wstring(L"8 Couldn't save preferences to ") + STR_CFG_REGPATH + std::wstring(L", error code: ") + std::to_wstring(ret));
-        return;
-    }*/
-    nihwnd->LogMessage(std::wstring(L"Saved preferences to ") + STR_CFG_REGPATH);
+
+    return success;
 }
 
-DWORD WINAPI NoInternetHotspotWnd::SwitchHotspot (LPVOID lpParam) {
-    if (*(bool*)lpParam == FALSE) nihwnd->_hostedNetwork.Start(); else nihwnd->_hostedNetwork.Stop();
+bool NoInternetHotspotWnd::WriteRegistryValue(HKEY hKey, LPCTSTR valueName, DWORD type, const BYTE* data, DWORD size, const std::wstring& valueText, LONG& err, std::wstring& failedValue, std::wstring& failedData) {
+    err = RegSetValueEx(hKey, valueName, 0, type, data, size);
+    if (err != ERROR_SUCCESS) {
+        failedValue = valueName;
+        failedData = valueText;
+        return false;
+    }
+    return true;
+}
+
+
+void NoInternetHotspotWnd::WriteConfig (const TCHAR* uiSsid, const TCHAR* uiPass, DWORD uiHidepass, DWORD uiAutoaccept)
+{
+    bool success = false;
+
+    HKEY hkSOFTWARE = nullptr;
+    HKEY hkNoInternetHotspot = nullptr;
+
+    LONG err = ERROR_SUCCESS;
+
+    std::wstring failedValue;
+    std::wstring failedData;
+
+    if (uiSsid == nullptr || uiPass == nullptr) {
+        return;
+    }
+
+    err = RegOpenKeyEx(HKEY_CURRENT_USER, _T("SOFTWARE"), 0, KEY_CREATE_SUB_KEY, &hkSOFTWARE);
+    if (err == ERROR_SUCCESS) {
+        err = RegCreateKeyEx(hkSOFTWARE, CFG_NAME, 0, nullptr, REG_OPTION_NON_VOLATILE, KEY_WRITE, nullptr, &hkNoInternetHotspot, nullptr);
+    } else {
+        failedValue = L"(open key)";
+    }
+
+    if (err == ERROR_SUCCESS) {
+        success = WriteRegistryValue(hkNoInternetHotspot, CFG_SSID, REG_SZ, reinterpret_cast<const BYTE*>(uiSsid), static_cast<DWORD>((lstrlen(uiSsid) + 1) * sizeof(TCHAR)), uiSsid, err, failedValue, failedData)
+            && WriteRegistryValue(hkNoInternetHotspot, CFG_PASS, REG_SZ, reinterpret_cast<const BYTE*>(uiPass), static_cast<DWORD>((lstrlen(uiPass) + 1) * sizeof(TCHAR)), uiPass, err, failedValue, failedData)
+            && WriteRegistryValue(hkNoInternetHotspot, CFG_HIDEPASS, REG_DWORD, reinterpret_cast<const BYTE*>(&uiHidepass), sizeof(uiHidepass), std::to_wstring(uiHidepass), err, failedValue, failedData)
+            && WriteRegistryValue(hkNoInternetHotspot, CFG_AUTOACCEPT, REG_DWORD, reinterpret_cast<const BYTE*>(&uiAutoaccept), sizeof(uiAutoaccept), std::to_wstring(uiAutoaccept), err, failedValue, failedData);
+    }
+
+    if (hkNoInternetHotspot)
+        RegCloseKey(hkNoInternetHotspot);
+
+    if (hkSOFTWARE)
+        RegCloseKey(hkSOFTWARE);
+
+    if (!success) {
+        nihwnd->LogMessage(
+            std::wstring(L"Registry write failed. Key=[")
+            + STR_CFG_REGPATH
+            + L"] Value=[" + failedValue
+            + L"] Data=[" + failedData
+            + L"] Error=[" + std::to_wstring(err) + L"]");
+    }
+    else {
+        nihwnd->LogMessage(
+            std::wstring(L"Saved preferences to ")
+            + STR_CFG_REGPATH);
+    }
+}
+
+
+DWORD WINAPI NoInternetHotspotWnd::SwitchHotspot (LPVOID) {
+    if (!hotspot_started.load())
+        nihwnd->_hostedNetwork.Start(); 
+    else 
+        nihwnd->_hostedNetwork.Stop();
     return 0;
 }
 
@@ -643,26 +666,17 @@ void NoInternetHotspotWnd::LayOutUI (HWND hWnd) {
     hClear = CreateWindow(_T("Button"), _T("Clear"), WS_VISIBLE | WS_CHILD, GUI_BTN_CLEARLOG_X, GUI_BTN_CLEARLOG_Y, GUI_BTN_CLEARLOG_W, GUI_BTN_CLEARLOG_H, hWnd, (HMENU)IDM_CLEARLOG, nullptr, nullptr);
 }
 
-TCHAR* NoInternetHotspotWnd::GetField (HWND hWnd) {
-    TCHAR* tempfieldbuffer = (TCHAR*)malloc(sizeof(TCHAR) * (
-#if MAX_SSIDLENGTH > MAX_PASSWORDLENGTH
-        MAX_SSIDLENGTH
-#else
-        MAX_PASSWORDLENGTH
-#endif
-            + 1));
-    if (tempfieldbuffer == NULL) {
-        return NULL;
-    }
-    GetWindowText(hWnd, tempfieldbuffer,
-#if MAX_SSIDLENGTH > MAX_PASSWORDLENGTH
-        MAX_SSIDLENGTH
-#else
-        MAX_PASSWORDLENGTH
-#endif
-            + 1);
-    return tempfieldbuffer;
+
+std::wstring NoInternetHotspotWnd::GetField(HWND hWnd) {
+    std::wstring text(MAX_STRBUFFLENGTH + 1, L'\0');
+    int length = GetWindowText(
+        hWnd,
+        &text[0],
+        static_cast<int>(text.size()));
+    text.resize(length);
+    return text;
 }
+
 
 void NoInternetHotspotWnd::SwitchAutoaccept (bool turnon) {
     if (turnon) {
@@ -696,17 +710,15 @@ void NoInternetHotspotWnd::OnAdvertisementStarted () {
 
     SetEvent(_apEvent.Get());
     CloseHandle(startstopthread);
-    hotspot_started = true;
+    hotspot_started.store(true);
  
-    TCHAR* ssid = GetField(hSsid);
-    TCHAR* pass = GetField(hPass);
+    std::wstring ssid = GetField(hSsid);
+    std::wstring pass = GetField(hPass);
     WriteConfig(
-        ssid,
-        pass,
+        ssid.c_str(),
+        pass.c_str(),
         static_cast<DWORD>(SendMessage(hHide, BM_GETCHECK, 0, 0)),
         static_cast<DWORD>(SendMessage(hAuto, BM_GETCHECK, 0, 0)));
-    free(ssid);
-    free(pass);
 }
 
 void NoInternetHotspotWnd::OnAdvertisementStopped (std::wstring message) {
@@ -718,7 +730,7 @@ void NoInternetHotspotWnd::OnAdvertisementStopped (std::wstring message) {
 
     SetEvent(_apEvent.Get());
     CloseHandle(startstopthread);
-    hotspot_started = false;
+    hotspot_started.store(false);
 }
 
 void NoInternetHotspotWnd::OnAdvertisementAborted (std::wstring message) {
@@ -732,7 +744,7 @@ void NoInternetHotspotWnd::OnAdvertisementAborted (std::wstring message) {
 
     SetEvent(_apEvent.Get());
     CloseHandle(startstopthread);
-    hotspot_started = false;
+    hotspot_started.store(false);
 }
 
 void NoInternetHotspotWnd::OnAsyncException (std::wstring message) {
@@ -742,7 +754,7 @@ void NoInternetHotspotWnd::OnAsyncException (std::wstring message) {
 
     SetEvent(_apEvent.Get());
     CloseHandle(startstopthread);
-    hotspot_started = false;
+    hotspot_started.store(false);
 }
 
 void NoInternetHotspotWnd::LogMessage (std::wstring message) { // adds time into the beginning, newline if needed, and sends it to the edit control (log)
