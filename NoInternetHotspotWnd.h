@@ -11,6 +11,13 @@
 #define MAX_SSIDLENGTH 32
 #define MAX_PASSWORDLENGTH 63
 
+#if MAX_SSIDLENGTH > MAX_PASSWORDLENGTH
+	#define MAX_STRBUFFLENGTH MAX_SSIDLENGTH
+#else
+	#define MAX_STRBUFFLENGTH MAX_PASSWORDLENGTH
+#endif
+
+
 // strings
 #define STR_FATAL_ERROR _T("Fatal!")
 #define STR_WARNING _T("Warning!")
@@ -131,10 +138,12 @@ class NoInternetHotspotWnd : public IWlanHostedNetworkListener, public IWlanHost
 	static LRESULT CALLBACK WndProc (HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR CALLBACK About (HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static void LayOutUI (HWND hWnd);
+	static bool ReadRegistryValue(HKEY hKey, LPCTSTR valueName, DWORD flags, void* data, DWORD* size, LONG& err, std::wstring& failedValue, DWORD& failedSize);
 	static bool ReadConfig (config* ptConfig);
-	static void WriteConfig (TCHAR* uissid, TCHAR* uipass, DWORD uihidepass, DWORD uiatoaccept);
+	static bool WriteRegistryValue(HKEY hKey, LPCTSTR valueName, DWORD type, const BYTE* data, DWORD size, const std::wstring& valueText, LONG& err, std::wstring& failedValue, std::wstring& failedData);
+	static void WriteConfig(const TCHAR* uiSsid, const TCHAR* uiPass, DWORD uiHidepass, DWORD uiAutoaccept);
 	static DWORD WINAPI SwitchHotspot (LPVOID lpParam);
 
-	static TCHAR* GetField (HWND hWnd);
+	static std::wstring GetField(HWND hWnd);
 	void SwitchAutoaccept (bool turnon);
 };
