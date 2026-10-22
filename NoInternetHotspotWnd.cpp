@@ -1,19 +1,6 @@
 #include <atomic>
 #include "NoInternetHotspotWnd.h"
 
-// Local Limits
-#if MAX_SSIDLENGTH > MAX_PASSWORDLENGTH
-    #define MAX_STRBUFFLENGTH MAX_SSIDLENGTH
-#else
-    #define MAX_STRBUFFLENGTH MAX_PASSWORDLENGTH
-#endif
-
-#if MAX_SSIDLENGTH > MAX_COMPUTERNAME_LENGTH
-    #define MAX_CHARBUFFLENGTH MAX_SSIDLENGTH
-#else
-    #define MAX_CHARBUFFLENGTH MAX_COMPUTERNAME_LENGTH
-#endif
-
 
 // Global Constants:
 const TCHAR empty_string[1] = _T("");
@@ -626,7 +613,7 @@ void NoInternetHotspotWnd::WriteConfig (const TCHAR* uiSsid, const TCHAR* uiPass
 
 DWORD WINAPI NoInternetHotspotWnd::SwitchHotspot (LPVOID) {
     if (!hotspot_started.load())
-        nihwnd->_hostedNetwork.Start(); 
+        nihwnd->_hostedNetwork.Start();
     else 
         nihwnd->_hostedNetwork.Stop();
     return 0;
@@ -680,6 +667,7 @@ std::wstring NoInternetHotspotWnd::GetField(HWND hWnd) {
 
 void NoInternetHotspotWnd::SwitchAutoaccept (bool turnon) {
     if (turnon) {
+        CheckDlgButton(hMain, IDM_AUTO, BST_CHECKED);
         _hostedNetwork.SetAutoAccept(TRUE);
         return;
     }
